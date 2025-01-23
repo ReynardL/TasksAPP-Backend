@@ -1,50 +1,62 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from datetime import datetime
-from typing import Dict, Optional
+from fastapi import FastAPI, HTTPException, Depends
+from typing import Dict, List
+from models import Task, SessionLocal
+from schemas import TaskModel, TaskResponse
+from sqlalchemy.orm import Session
 
 app = FastAPI()
 
-tasks = {}
-i = 0
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class Task(BaseModel):
-    title: str
-    description: str
-    completed: Optional[bool] = False 
-    created: datetime = Field(default_factory=datetime.now)
-
-class TaskResponse(BaseModel):
-    message: str
-    task: Task
-
-@app.get("/tasks", response_model=Dict[int, Task])
-def get_tasks():
-    return tasks
+@app.get("/tasks", response_model=List[TaskModel])
+def get_tasks(db: Session = Depends(get_db)):
+    return db.query(Task).all()
 
 @app.post("/tasks", response_model=TaskResponse)
-def create_task(task: Task):
-    global i
-    tasks[i] = task
-    i += 1
-    return {"message": "Task Created Succesfully", "task": task}
+def create_task(task: TaskModel, db: Session = Depends(get_db)):
+    if not task.title:
+        raise HTTPException(status_code=400, detail="Title is required")
+    
+    new_task = Task(title=task.title, description=task.description, completed=task.completed)
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return {"message": "Task Created", "task": new_task}
 
-@app.get("/tasks/{id}", response_model=Task)
-def get_task_by_id(id: int):
-    if id not in tasks: 
+@app.get("/tasks/{id}", response_model=TaskModel)
+def get_task_by_id(id: int, db: Session = Depends(get_db)):
+    db_task = db.query(Task).filter(Task.id == id).first()
+    if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return tasks[id]
+    return db_task
 
 @app.put("/tasks/{id}", response_model=TaskResponse)
-def update_task(id: int, new_task: Task):
-    if id not in tasks: 
+def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
+    db_task = db.query(Task).filter(Task.id == id).first()
+    if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    tasks[id] = new_task
-    return {"message": "Task Updated Succesfully", "task": new_task}
+    
+    if new_task.title is not None:
+        db_task.title = new_task.title
+    if new_task.description is not None:
+        db_task.description = new_task.description
+    if new_task.completed is not None:
+        db_task.completed = new_task.completed
+    
+    db.commit()
+    db.refresh(db_task)
+    return {"message": "Task Updated", "task": db_task}
 
 @app.delete("/tasks/{id}", response_model=Dict[str, str])
-def delete_task(id: int):
-    if id not in tasks: 
+def delete_task(id: int, db: Session = Depends(get_db)):
+    db_task = db.query(Task).filter(Task.id == id).first()
+    if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    del tasks[id]
-    return {"message": "Task Deleted Sucessfully"}
+    db.delete(db_task)
+    db.commit()
+    return {"message": "Task Deleted"}
