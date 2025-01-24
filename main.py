@@ -37,7 +37,7 @@ def create_task(task: TaskModel, db: Session = Depends(get_db)):
     if not task.title:
         raise HTTPException(status_code=400, detail="Title is required")
     
-    if getattr(task, "repeat_type") != 'never' and getattr(task, "due") is None:
+    if getattr(task, "repeat_type") and getattr(task, "repeat_type") != 'never' and getattr(task, "due") is None:
         raise HTTPException(status_code=400, detail="Due date is required to repeat tasks")
 
     new_task = Task(
