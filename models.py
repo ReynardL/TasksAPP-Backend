@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+from schemas import PriorityEnum, CompletedEnum
 
 Base = declarative_base()
 
@@ -10,7 +11,9 @@ class Task(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String, nullable=False)
     description = Column(String)
-    completed = Column(Boolean, default=False)
+    completed = Column(Enum(CompletedEnum), default=CompletedEnum.false)
+    due = Column(DateTime)
+    priority = Column(Enum(PriorityEnum))
     created = Column(DateTime, default=datetime.now)
 
 DATABASE_URL = "sqlite:///./tasks.db"

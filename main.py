@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 app = FastAPI()
 
+# editable_fields = {"title", "description", "completed", "due", "priority"}
+uneditable_fields = {"id", "created"}
+
 def get_db():
     db = SessionLocal()
     try:
@@ -22,7 +25,13 @@ def create_task(task: TaskModel, db: Session = Depends(get_db)):
     if not task.title:
         raise HTTPException(status_code=400, detail="Title is required")
     
-    new_task = Task(title=task.title, description=task.description, completed=task.completed)
+    new_task = Task(
+        title=task.title, 
+        description=task.description, 
+        completed=task.completed,
+        due=task.due,
+        priority=task.priority
+        )
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
@@ -41,12 +50,9 @@ def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if new_task.title is not None:
-        db_task.title = new_task.title
-    if new_task.description is not None:
-        db_task.description = new_task.description
-    if new_task.completed is not None:
-        db_task.completed = new_task.completed
+    for field in new_task.__fields_set__:
+        if field not in uneditable_fields:
+            setattr(db_task, field, getattr(new_task, field))
     
     db.commit()
     db.refresh(db_task)
