@@ -3,11 +3,13 @@ from typing import Dict, List
 from models import Task, SessionLocal
 from schemas import TaskModel, TaskResponse
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 app = FastAPI()
 
-# editable_fields = {"title", "description", "completed", "due", "priority"}
 uneditable_fields = {"id", "created"}
+unnullable = {"title", "completed", "repeat_type", "repeat_amount"}
 
 def get_db():
     db = SessionLocal()
@@ -15,6 +17,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def add_interval(due: datetime, repeat: str, amount: int):
+    if repeat == "daily":
+        return due + timedelta(days=amount)
+    elif repeat == "weekly":
+        return due + timedelta(weeks=amount)
+    elif repeat == "monthly":
+        return due + relativedelta(months=amount)
+    elif repeat == "yearly":
+        return due + relativedelta(years=amount)
 
 @app.get("/tasks", response_model=List[TaskModel])
 def get_tasks(db: Session = Depends(get_db)):
@@ -25,12 +37,17 @@ def create_task(task: TaskModel, db: Session = Depends(get_db)):
     if not task.title:
         raise HTTPException(status_code=400, detail="Title is required")
     
+    if getattr(task, "repeat_type") != 'never' and getattr(task, "due") is None:
+        raise HTTPException(status_code=400, detail="Due date is required to repeat tasks")
+
     new_task = Task(
         title=task.title, 
         description=task.description, 
         completed=task.completed,
         due=task.due,
-        priority=task.priority
+        priority=task.priority,
+        repeat_type=task.repeat_type,
+        repeat_amount=task.repeat_amount
         )
     db.add(new_task)
     db.commit()
@@ -52,7 +69,15 @@ def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
     
     for field in new_task.__fields_set__:
         if field not in uneditable_fields:
+            if field in unnullable and getattr(new_task, field) is None:
+                continue
+            if field == "repeat_type" and getattr(db_task, "due") is None:
+                raise HTTPException(status_code=400, detail="Cannot repeat task when due date is not specified")
             setattr(db_task, field, getattr(new_task, field))
+    
+    if getattr(db_task, "completed") == "true" and getattr(db_task, "repeat_type") != "never":
+            db_task.due = add_interval(getattr(db_task, "due"), getattr(db_task, "repeat_type"), getattr(db_task, "repeat_amount"))
+            db_task.completed = "false"
     
     db.commit()
     db.refresh(db_task)

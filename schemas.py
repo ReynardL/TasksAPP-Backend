@@ -13,6 +13,13 @@ class CompletedEnum(str, Enum):
     in_progress = "in progress"
     true = "true"
 
+class RepeatEnum(str, Enum):
+    never = "never"
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    yearly = "yearly"
+
 class TaskModel(BaseModel):
     id: Optional[int] = None
     title: Optional[str] = None
@@ -20,6 +27,8 @@ class TaskModel(BaseModel):
     completed: Optional[CompletedEnum] = None
     due: Optional[datetime] = None
     priority: Optional[PriorityEnum] = None
+    repeat_type: Optional[RepeatEnum] = None
+    repeat_amount: Optional[int] = None
     created: Optional[datetime] = None
 
 class TaskResponse(BaseModel):

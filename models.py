@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, create_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from schemas import PriorityEnum, CompletedEnum
+from schemas import PriorityEnum, CompletedEnum, RepeatEnum
 
 Base = declarative_base()
 
@@ -14,6 +14,8 @@ class Task(Base):
     completed = Column(Enum(CompletedEnum), default=CompletedEnum.false)
     due = Column(DateTime)
     priority = Column(Enum(PriorityEnum))
+    repeat_type = Column(Enum(RepeatEnum), default=RepeatEnum.never)
+    repeat_amount = Column(Integer, default=1, nullable=False)
     created = Column(DateTime, default=datetime.now)
 
 DATABASE_URL = "sqlite:///./tasks.db"
