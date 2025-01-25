@@ -80,7 +80,7 @@ def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
         if field not in uneditable_fields:
             if field in unnullable and value is None:
                 raise HTTPException(status_code=400, detail=f"{field} cannot be null")
-            if field == "repeat_type" and getattr(db_task, "due") is None:
+            if getattr(db_task, "repeat_type") != "never" and getattr(db_task, "due") is None:
                 raise HTTPException(status_code=400, detail="Cannot repeat task when due date is not specified")
             setattr(db_task, field, value) 
     
