@@ -5,8 +5,17 @@ from schemas import TaskModel, TaskResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
 
 uneditable_fields = {"id", "created"}
 unnullable = {"title", "completed", "repeat_type", "repeat_amount"}
