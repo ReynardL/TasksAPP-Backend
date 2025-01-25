@@ -76,13 +76,13 @@ def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    for field in new_task.__fields_set__:
+    for field, value in new_task.__dict__.items():
         if field not in uneditable_fields:
-            if field in unnullable and getattr(new_task, field) is None:
-                continue
+            if field in unnullable and value is None:
+                raise HTTPException(status_code=400, detail=f"{field} cannot be null")
             if field == "repeat_type" and getattr(db_task, "due") is None:
                 raise HTTPException(status_code=400, detail="Cannot repeat task when due date is not specified")
-            setattr(db_task, field, getattr(new_task, field))
+            setattr(db_task, field, value) 
     
     if getattr(db_task, "completed") == "true" and getattr(db_task, "repeat_type") != "never":
             db_task.due = add_interval(getattr(db_task, "due"), getattr(db_task, "repeat_type"), getattr(db_task, "repeat_amount"))

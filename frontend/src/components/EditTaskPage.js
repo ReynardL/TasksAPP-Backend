@@ -13,7 +13,7 @@ function EditTaskPage({ fetchTasks }) {
     dueDate: '',
     dueTime: '',
     priority: 'None',
-    repeatType: 'None',
+    repeatType: 'never',
     repeatAmount: '',
   });
 
@@ -30,8 +30,8 @@ function EditTaskPage({ fetchTasks }) {
           dueDate: dueDateTime[0] || '',
           dueTime: dueDateTime[1] || '',
           priority: data.priority || 'None',
-          repeatType: data.repeatType || 'None',
-          repeatAmount: data.repeatAmount || '',
+          repeatType: data.repeat_type || 'never',
+          repeatAmount: data.repeat_amount || '',
         });
       })
       .catch((error) => console.error('Error fetching task data:', error));
@@ -54,11 +54,18 @@ function EditTaskPage({ fetchTasks }) {
         : null;
 
     const updatedTask = {
-      ...taskData,
+      title: taskData.title === "" ? null : taskData.title,
+      description: taskData.description === "" ? null : taskData.description,
+      completed: taskData.completed,
+      priority: taskData.priority === "None" ? null : taskData.priority,
+      repeat_type: taskData.repeatType,
+      repeat_amount: taskData.repeatAmount === "" ? null : taskData.repeatAmount,
       due: combinedDue,
     };
 
-    fetch(`http://127.0.0.1:8000/tasks/${id}`, {
+    console.log(updatedTask);
+
+    fetch(`${apiUrl}/tasks/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -147,7 +154,7 @@ function EditTaskPage({ fetchTasks }) {
             value={taskData.repeatType}
             onChange={handleInputChange}
           >
-            <option value="None">None</option>
+            <option value="never">Never</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>

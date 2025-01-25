@@ -6,12 +6,9 @@ import EditTaskPage from "./components/EditTaskPage";
 
 const apiUrl = process.env.REACT_APP_API_URL;
 
-console.log('penv', process.env.REACT_APP_API_URL);
-
 const App = () => {
   const [tasks, setTasks] = useState([]);
 
-  console.log('API URL:', `${apiUrl}/tasks`);
   const fetchTasks = () => {
     fetch(`${apiUrl}/tasks`)
       .then((response) => response.json())

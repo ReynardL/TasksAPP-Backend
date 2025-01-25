@@ -12,7 +12,7 @@ function CreateTaskPage({ fetchTasks }) {
     dueDate: "",
     dueTime: "",
     priority: "None",
-    repeatType: "None",
+    repeatType: "never",
     repeatAmount: "",
   });
 
@@ -32,11 +32,18 @@ function CreateTaskPage({ fetchTasks }) {
       : null;
 
     const newTask = {
-      ...taskData,
+      title: taskData.title === "" ? null : taskData.title,
+      description: taskData.description === "" ? null : taskData.description,
+      completed: taskData.completed,
+      priority: taskData.priority === "None" ? null : taskData.priority,
+      repeat_type: taskData.repeatType,
+      repeat_amount: taskData.repeatAmount === "" ? null : taskData.repeatAmount,
       due: combinedDue,
     };
 
-    fetch("${apiUrl}/tasks", {
+    console.log(JSON.stringify(newTask));
+
+    fetch(`${apiUrl}/tasks`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -123,7 +130,7 @@ function CreateTaskPage({ fetchTasks }) {
             value={taskData.repeatType}
             onChange={handleInputChange}
           >
-            <option value="None">None</option>
+            <option value="never">Never</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
