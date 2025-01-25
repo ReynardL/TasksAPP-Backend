@@ -1,10 +1,14 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+import os
 from datetime import datetime
 from schemas import PriorityEnum, CompletedEnum, RepeatEnum
 
 Base = declarative_base()
+
+load_dotenv()
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -18,7 +22,7 @@ class Task(Base):
     repeat_amount = Column(Integer, default=1, nullable=False)
     created = Column(DateTime, default=datetime.now)
 
-DATABASE_URL = "sqlite:///./tasks.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
