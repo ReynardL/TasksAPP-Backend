@@ -9,8 +9,6 @@ import DisplayTaskPage from "./components/DisplayTaskPage";
 
 const apiUrl = process.env.REACT_APP_API_URL;
 
-console.log(apiUrl);
-
 const App = () => {
 
   const fetchTasks = async () => {
