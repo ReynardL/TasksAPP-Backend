@@ -12,7 +12,7 @@ module.exports = {
     module: {
         rules: [
             {
-                test: /\.js$/,
+                test: /\.(js|jsx)$/,
                 exclude: /node_modules/,
                 use: {
                     loader: "babel-loader",
@@ -45,4 +45,7 @@ module.exports = {
         port: 3001,
         open: true,
     },
+    resolve: {
+        extensions: ['.js', '.jsx'],
+      },
 };
