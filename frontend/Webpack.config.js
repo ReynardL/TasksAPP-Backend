@@ -1,5 +1,6 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
 
 module.exports = {
@@ -7,6 +8,7 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, "dist"),
         filename: "bundle.js",
+        publicPath: '/',
     },
     module: {
         rules: [
@@ -32,6 +34,7 @@ module.exports = {
     },
     plugins: [
         new Dotenv(),
+        new CleanWebpackPlugin(),
         new HtmlWebpackPlugin({
             template: "./public/index.html",
         }),
@@ -40,7 +43,7 @@ module.exports = {
         static: {
             directory: path.join(__dirname, "dist"),
         },
-        port: 3000,
+        port: 3001,
         open: true,
     },
 };
