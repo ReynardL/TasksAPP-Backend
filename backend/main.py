@@ -11,7 +11,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_origins=["http://localhost:3001"],  # Frontend URL
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
@@ -36,6 +36,31 @@ def add_interval(due: datetime, repeat: str, amount: int):
         return due + relativedelta(months=amount)
     elif repeat == "yearly":
         return due + relativedelta(years=amount)
+
+@app.post("/tasks/search", response_model=List[TaskModel])
+def search_tasks(task: TaskModel, db: Session = Depends(get_db)):
+    query = db.query(Task)
+
+    if task.title:
+        query = query.filter(Task.title.ilike(f"%{task.title}%"))
+    if task.description:
+        query = query.filter(Task.description.ilike(f"%{task.description}%"))
+    if task.completed:
+        query = query.filter(Task.completed == task.completed)
+    if task.due:
+        start_of_day = datetime.combine(task.due, datetime.min.time())
+        end_of_day = datetime.combine(task.due, datetime.max.time())
+        query = query.filter(Task.due >= start_of_day, Task.due <= end_of_day)
+    if task.priority:
+        query = query.filter(Task.priority == task.priority)
+    if task.repeat_type:
+        query = query.filter(Task.repeat_type == task.repeat_type)
+    if task.created:
+        start_of_day = datetime.combine(task.created, datetime.min.time())
+        end_of_day = datetime.combine(task.created, datetime.max.time())
+        query = query.filter(Task.due >= start_of_day, Task.due <= end_of_day)
+
+    return query.all()
 
 @app.get("/tasks", response_model=List[TaskModel])
 def get_tasks(db: Session = Depends(get_db)):
