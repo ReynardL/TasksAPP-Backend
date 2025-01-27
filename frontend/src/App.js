@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import MainPage from "./components/MainPage";
 import CreateTaskPage from "./components/CreateTaskPage";
@@ -8,6 +8,8 @@ import FilterPage from "./components/FilterPage";
 import DisplayTaskPage from "./components/DisplayTaskPage";
 
 const apiUrl = process.env.REACT_APP_API_URL;
+
+console.log(apiUrl);
 
 const App = () => {
 
