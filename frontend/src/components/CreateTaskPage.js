@@ -39,8 +39,6 @@ function CreateTaskPage({ apiUrl }) {
       due: combinedDue,
     };
 
-    console.log(JSON.stringify(newTask));
-
     fetch(`${apiUrl}/tasks`, {
       method: "POST",
       headers: {

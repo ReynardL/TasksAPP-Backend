@@ -13,8 +13,8 @@ function DisplayTaskPage({ apiUrl }) {
     dueDate: "",
     dueTime: "",
     priority: "None",
-    repeatType: "never",
-    repeatAmount: "",
+    repeat_type: "never",
+    repeat_amount: "",
     createdDate: "",
     createdTime: "",
   });
@@ -33,8 +33,8 @@ function DisplayTaskPage({ apiUrl }) {
           dueDate: dueDateTime[0] || "",
           dueTime: dueDateTime[1] || "",
           priority: data.priority || "None",
-          repeatType: data.repeat_type || "never",
-          repeatAmount: data.repeat_amount || "",
+          repeat_type: data.repeat_type || "never",
+          repeat_amount: data.repeat_amount || "",
           createdDate: createdDateTime[0] || "",
           createdTime: createdDateTime[1]?.slice(0, 8) || "",
         });
@@ -65,8 +65,8 @@ function DisplayTaskPage({ apiUrl }) {
         <div className="text-sm text-gray-600 space-y-2 mt-auto">
           <p>
             <strong>Repeat:</strong>{" "}
-            {taskData.repeatType !== "never"
-              ? `Every ${taskData.repeatAmount} ${taskData.repeatType}`
+            {taskData.repeat_type !== "never"
+              ? `Every ${taskData.repeat_amount} ${taskData.repeat_type}`
               : "never"}
           </p>
           <p>

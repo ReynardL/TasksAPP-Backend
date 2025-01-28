@@ -19,8 +19,6 @@ function EditTaskPage({ apiUrl }) {
   const handleUpdateTask = (e) => {
     e.preventDefault();
 
-    console.log(taskData);
-
     const combinedDue =
       taskData.dueDate && taskData.dueTime
         ? `${taskData.dueDate}T${taskData.dueTime}`
@@ -35,8 +33,6 @@ function EditTaskPage({ apiUrl }) {
       repeat_amount: taskData.repeat_amount === "" ? null : taskData.repeat_amount,
       due: combinedDue,
     };
-
-    console.log(updatedTask);
 
     fetch(`${apiUrl}/tasks/${id}`, {
       method: 'PUT',
