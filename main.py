@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 app = FastAPI()
 
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "https://tasksweb.onrender.com"],  # Frontend URL
+    allow_origins=allowed_origins, 
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
