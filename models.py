@@ -22,8 +22,10 @@ class Task(Base):
     repeat_amount = Column(Integer, default=1, nullable=False)
     created = Column(DateTime, default=datetime.now)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
+DB_USER = os.getenv("DB_USER") 
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME") 
+engine = create_engine(f"postgresql://{DB_NAME}:{DB_PASSWORD}@localhost:5432/{DB_NAME}")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base.metadata.create_all(bind=engine)
