@@ -1,14 +1,22 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
-import os
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Boolean
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from schemas import PriorityEnum, CompletedEnum, RepeatEnum
+import uuid
 
 Base = declarative_base()
 
-load_dotenv()
+class User(Base):
+    __tablename__ = "users"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)
+    
+    tasks = relationship("Task", back_populates="owner")
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -21,11 +29,6 @@ class Task(Base):
     repeat_type = Column(Enum(RepeatEnum), default=RepeatEnum.never)
     repeat_amount = Column(Integer, default=1, nullable=False)
     created = Column(DateTime, default=datetime.now)
-
-DB_USER = os.getenv("DB_USER") 
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME") 
-engine = create_engine(f"postgresql://{DB_NAME}:{DB_PASSWORD}@localhost:5432/{DB_NAME}")
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base.metadata.create_all(bind=engine)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    
+    owner = relationship("User", back_populates="tasks")

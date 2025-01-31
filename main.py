@@ -1,14 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends
 from typing import Dict, List
-from models import Task, SessionLocal
-from schemas import TaskModel, TaskResponse
+from models import Task, User, Base
+from dependencies import get_db, get_user_manager, auth_backend, engine
+from schemas import TaskModel, TaskResponse, UserRead, UserCreate, UserUpdate
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from fastapi_users import FastAPIUsers
+import os, uuid
 
 app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
 
@@ -20,15 +24,25 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
+fastapi_users = FastAPIUsers[User, uuid.UUID](
+    get_user_manager,
+    [auth_backend] 
+)
+
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend),
+    prefix="/auth/jwt",
+    tags=["auth"]
+)
+
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"]
+)
+
 uneditable_fields = {"id", "created"}
 unnullable = {"title", "completed", "repeat_type", "repeat_amount"}
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 def add_interval(due: datetime, repeat: str, amount: int):
     if repeat == "daily":

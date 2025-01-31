@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from enum import Enum
+from fastapi_users import schemas
+import uuid
 
 class PriorityEnum(str, Enum):
     low = "low"
@@ -34,3 +36,12 @@ class TaskModel(BaseModel):
 class TaskResponse(BaseModel):
     message: str
     task: TaskModel
+
+class UserRead(schemas.BaseUser[uuid.UUID]):
+    pass
+
+class UserCreate(schemas.BaseUserCreate):
+    pass
+
+class UserUpdate(schemas.BaseUserUpdate):
+    pass
