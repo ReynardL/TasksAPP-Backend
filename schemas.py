@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -32,16 +32,19 @@ class TaskModel(BaseModel):
     repeat_type: Optional[RepeatEnum] = None
     repeat_amount: Optional[int] = None
     created: Optional[datetime] = None
+    user_id: Optional[uuid.UUID] = None
 
 class TaskResponse(BaseModel):
     message: str
     task: TaskModel
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
-    pass
+    class Config:
+        from_attributes = True
 
 class UserCreate(schemas.BaseUserCreate):
-    pass
+    email: EmailStr
+    password: str
 
 class UserUpdate(schemas.BaseUserUpdate):
     pass

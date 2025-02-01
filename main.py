@@ -3,16 +3,23 @@ from typing import Dict, List
 from models import Task, User, Base
 from dependencies import get_db, get_user_manager, auth_backend, engine
 from schemas import TaskModel, TaskResponse, UserRead, UserCreate, UserUpdate
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_users import FastAPIUsers
+from sqlalchemy import select
 import os, uuid
 
 app = FastAPI()
 
-Base.metadata.create_all(bind=engine)
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
 
@@ -20,13 +27,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 fastapi_users = FastAPIUsers[User, uuid.UUID](
     get_user_manager,
-    [auth_backend] 
+    [auth_backend]
 )
 
 app.include_router(
@@ -53,93 +60,103 @@ def add_interval(due: datetime, repeat: str, amount: int):
         return due + relativedelta(months=amount)
     elif repeat == "yearly":
         return due + relativedelta(years=amount)
-
+    
 @app.post("/tasks/search", response_model=List[TaskModel])
-def search_tasks(task: TaskModel, db: Session = Depends(get_db)):
-    query = db.query(Task)
+async def search_tasks(
+    task: TaskModel, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    stmt = select(Task).filter(Task.user_id == current_user.id)
 
     if task.title:
-        query = query.filter(Task.title.ilike(f"%{task.title}%"))
+        stmt = stmt.filter(Task.title.ilike(f"%{task.title}%"))
     if task.description:
-        query = query.filter(Task.description.ilike(f"%{task.description}%"))
-    if task.completed:
-        query = query.filter(Task.completed == task.completed)
+        stmt = stmt.filter(Task.description.ilike(f"%{task.description}%"))
+    if task.completed is not None:
+        stmt = stmt.filter(Task.completed == task.completed)
     if task.due:
         start_of_day = datetime.combine(task.due, datetime.min.time())
         end_of_day = datetime.combine(task.due, datetime.max.time())
-        query = query.filter(Task.due >= start_of_day, Task.due <= end_of_day)
+        stmt = stmt.filter(Task.due >= start_of_day, Task.due <= end_of_day)
     if task.priority:
-        query = query.filter(Task.priority == task.priority)
+        stmt = stmt.filter(Task.priority == task.priority)
     if task.repeat_type:
-        query = query.filter(Task.repeat_type == task.repeat_type)
+        stmt = stmt.filter(Task.repeat_type == task.repeat_type)
     if task.created:
         start_of_day = datetime.combine(task.created, datetime.min.time())
         end_of_day = datetime.combine(task.created, datetime.max.time())
-        query = query.filter(Task.due >= start_of_day, Task.due <= end_of_day)
+        stmt = stmt.filter(Task.created >= start_of_day, Task.created <= end_of_day)
 
-    return query.all()
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 @app.get("/tasks", response_model=List[TaskModel])
-def get_tasks(db: Session = Depends(get_db)):
-    return db.query(Task).all()
-
-@app.post("/tasks", response_model=TaskResponse)
-def create_task(task: TaskModel, db: Session = Depends(get_db)):
-    if not task.title:
-        raise HTTPException(status_code=400, detail="Title is required")
-    
-    if getattr(task, "repeat_type") and getattr(task, "repeat_type") != 'never' and getattr(task, "due") is None:
-        raise HTTPException(status_code=400, detail="Due date is required to repeat tasks")
-
-    new_task = Task(
-        title=task.title, 
-        description=task.description, 
-        completed=task.completed,
-        due=task.due,
-        priority=task.priority,
-        repeat_type=task.repeat_type,
-        repeat_amount=task.repeat_amount
-        )
-    db.add(new_task)
-    db.commit()
-    db.refresh(new_task)
-    return {"message": "Task Created", "task": new_task}
+async def get_tasks(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    stmt = select(Task).filter(Task.user_id == current_user.id)
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 @app.get("/tasks/{id}", response_model=TaskModel)
-def get_task_by_id(id: int, db: Session = Depends(get_db)):
-    db_task = db.query(Task).filter(Task.id == id).first()
+async def get_task_by_id(
+    id: int, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    stmt = select(Task).filter(Task.id == id, Task.user_id == current_user.id)
+    result = await db.execute(stmt)
+    db_task = result.scalar_one_or_none()
     if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="Task not found or not authorized")
     return db_task
 
 @app.put("/tasks/{id}", response_model=TaskResponse)
-def update_task(id: int, new_task: TaskModel, db: Session = Depends(get_db)):
-    db_task = db.query(Task).filter(Task.id == id).first()
+async def update_task(
+    id: int, 
+    new_task: TaskModel, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    stmt = select(Task).filter(Task.id == id, Task.user_id == current_user.id)
+    result = await db.execute(stmt)
+    db_task = result.scalar_one_or_none()
+
     if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    if getattr(new_task, "repeat_type") != "never" and getattr(new_task, "due") is None:
+        raise HTTPException(status_code=404, detail="Task not found or not authorized")
+
+    if getattr(new_task, "repeat_type", None) != "never" and getattr(new_task, "due") is None:
         raise HTTPException(status_code=400, detail="Cannot repeat task when due date is not specified")
 
     for field, value in new_task.__dict__.items():
         if field not in uneditable_fields:
             if field in unnullable and value is None:
                 raise HTTPException(status_code=400, detail=f"{field} cannot be null")
-            setattr(db_task, field, value) 
-    
+            setattr(db_task, field, value)
+
     if getattr(db_task, "completed") == "true" and getattr(db_task, "repeat_type") != "never":
-            db_task.due = add_interval(getattr(db_task, "due"), getattr(db_task, "repeat_type"), getattr(db_task, "repeat_amount"))
-            db_task.completed = "false"
-    
-    db.commit()
-    db.refresh(db_task)
+        db_task.due = add_interval(getattr(db_task, "due"), getattr(db_task, "repeat_type"), getattr(db_task, "repeat_amount"))
+        db_task.completed = "false"
+
+    await db.commit()
+    await db.refresh(db_task)
     return {"message": "Task Updated", "task": db_task}
 
 @app.delete("/tasks/{id}", response_model=Dict[str, str])
-def delete_task(id: int, db: Session = Depends(get_db)):
-    db_task = db.query(Task).filter(Task.id == id).first()
+async def delete_task(
+    id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    stmt = select(Task).filter(Task.id == id, Task.user_id == current_user.id)
+    result = await db.execute(stmt)
+    db_task = result.scalar_one_or_none()
+
     if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    db.delete(db_task)
-    db.commit()
+        raise HTTPException(status_code=404, detail="Task not found or not authorized")
+
+    await db.delete(db_task)
+    await db.commit()
     return {"message": "Task Deleted"}

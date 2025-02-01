@@ -1,8 +1,11 @@
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from dotenv import load_dotenv
 from fastapi_users.authentication import JWTStrategy, AuthenticationBackend, BearerTransport
 from fastapi_users import BaseUserManager, UUIDIDMixin
+from fastapi_users.db import SQLAlchemyUserDatabase
+from fastapi_users.password import PasswordHelper
+from fastapi import Depends
 from models import User
 import uuid
 import os
@@ -14,15 +17,15 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME") 
 
-engine = create_engine(f"postgresql://{DB_NAME}:{DB_PASSWORD}@localhost:5432/{DB_NAME}")
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_async_engine(f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@localhost:5432/{DB_NAME}")
+async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    async with async_session_maker() as session:
+        yield session
+
+async def get_user_db(session: AsyncSession = Depends(get_db)):
+    yield SQLAlchemyUserDatabase(session, User)
 
 bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
 
@@ -35,9 +38,28 @@ auth_backend = AuthenticationBackend(
     get_strategy=get_jwt_strategy,
 )
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-    def on_after_register(self, user: User, request=None):
-        print(f"User {user.id} has registered.")
+password_helper = PasswordHelper()
 
-def get_user_manager():
-    yield UserManager()
+class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+    def __init__(self, user_db):
+        super().__init__(
+            user_db=user_db,
+            password_helper=password_helper
+        )
+        
+    async def on_after_register(self, user: User, request=None):
+        print(f"User {user.id} registered with email {user.email} and password {user.hashed_password}")
+
+    async def authenticate(self, credentials):
+        print(f"Authentication attempt for: {credentials.username}")
+
+        user = await self.user_db.get_by_email(credentials.username)
+        
+        if user is None:
+            print("User not found")
+            return None
+
+        return await super().authenticate(credentials)
+
+async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
+    yield UserManager(user_db)
