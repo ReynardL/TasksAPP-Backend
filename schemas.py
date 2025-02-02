@@ -58,8 +58,9 @@ class FolderMemberModel(BaseModel):
     added_at: Optional[datetime] = None
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
-    class Config:
-        from_attributes = True
+    id: Optional[uuid.UUID] = None
+    email: Optional[str] = None
+    message: Optional[str] = None
 
 class UserCreate(schemas.BaseUserCreate):
     email: EmailStr

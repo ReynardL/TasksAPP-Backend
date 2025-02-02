@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from typing import Dict, List
 from models import Task, User, Folder, FolderMember, Base
 from dependencies import get_db, get_user_manager, auth_backend, engine
-from schemas import TaskModel, TaskResponse, FolderModel, FolderMemberModel, UserRead, UserCreate, UserUpdate, RoleEnum
+from schemas import TaskModel, TaskResponse, FolderModel, FolderMemberModel, UserRead, UserCreate, UserUpdate, RoleEnum, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Query
 from datetime import datetime, timedelta
@@ -123,7 +123,17 @@ def apply_task_filters(query: Query, task: TaskModel):
         query = query.filter(Task.created >= start_of_day, Task.created <= end_of_day)
     
     return query
+
+
+# user
+
+@app.get("/user", response_model=UserRead)
+async def get_current_user(current_user: Optional[User] = Depends(fastapi_users.current_user(optional=True))):
+    if not current_user:
+        return {"message": "No user logged in"}
     
+    return {"id": current_user.id, "email": current_user.email}
+
 
 # tasks
 
