@@ -264,6 +264,21 @@ async def create_folder(
 
     return new_folder
 
+@app.put("/folders/{folder_id}", response_model=FolderModel)
+async def edit_folder(
+    folder_id: int,
+    new_folder: FolderModel,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    folder = await check_folder_access(folder_id, mode="owner", db=db, current_user=current_user)
+    
+    folder.name = new_folder.name
+
+    await db.commit()
+    await db.refresh(folder)
+    return folder
+
 @app.delete("/folders/{folder_id}", response_model=Dict[str, str])
 async def delete_folder(
     folder_id: int,
