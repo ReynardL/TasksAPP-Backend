@@ -27,8 +27,8 @@ class Folder(Base):
     created_at = Column(DateTime, default=datetime.now)
 
     owner = relationship("User")
-    tasks = relationship("Task", back_populates="folder")
-    members = relationship("FolderMember", back_populates="folder")
+    tasks = relationship("Task", back_populates="folder", cascade="all, delete, delete-orphan")
+    members = relationship("FolderMember", back_populates="folder", cascade="all, delete, delete-orphan")
 
 class FolderMember(Base):
     __tablename__ = "folder_members"
@@ -53,7 +53,7 @@ class Task(Base):
     repeat_amount = Column(Integer, default=1, nullable=False)
     created = Column(DateTime, default=datetime.now)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True)
+    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=False)
 
     owner = relationship("User", back_populates="tasks")
     folder = relationship("Folder", back_populates="tasks")

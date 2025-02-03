@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from typing import Dict, List
 from models import Task, User, Folder, FolderMember, Base
 from dependencies import get_db, get_user_manager, auth_backend, engine
-from schemas import TaskModel, TaskResponse, FolderModel, FolderMemberModel, UserRead, UserCreate, UserUpdate, RoleEnum, Optional
+from schemas import TaskModel, TaskResponse, FolderModel, FolderMemberModel, FolderMemberWithEmail, UserRead, UserCreate, UserUpdate, UserReturnModel, RoleEnum, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Query
 from datetime import datetime, timedelta
@@ -40,7 +40,7 @@ fastapi_users = FastAPIUsers[User, uuid.UUID](
 app.include_router(
     fastapi_users.get_auth_router(auth_backend),
     prefix="/auth/jwt",
-    tags=["auth"]
+    tags=["auth"],
 )
 
 app.include_router(
@@ -127,12 +127,42 @@ def apply_task_filters(query: Query, task: TaskModel):
 
 # user
 
-@app.get("/user", response_model=UserRead)
+@app.get("/user", response_model=UserReturnModel)
 async def get_current_user(current_user: Optional[User] = Depends(fastapi_users.current_user(optional=True))):
     if not current_user:
         return {"message": "No user logged in"}
     
     return {"id": current_user.id, "email": current_user.email}
+
+@app.get("/user/{user_id}", response_model=UserReturnModel)
+async def get_user_by_id(
+    user_id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(User).filter(User.id == user_id)
+    )
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"id": user_id, "email": user.email}
+
+@app.get("/users/by-email", response_model=UserReturnModel)
+async def get_user_by_email(
+    email: str,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
 
 
 # tasks
@@ -142,9 +172,11 @@ async def get_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
-    stmt = select(Task).filter(
-        (Task.user_id == current_user.id) |  
-        (Task.folder.has(FolderMember.user_id == current_user.id))
+    stmt = (
+        select(Task)
+        .join(Task.folder)
+        .join(Folder.members)
+        .where(FolderMember.user_id == current_user.id)
     )
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -155,17 +187,14 @@ async def get_task_by_id(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
-    stmt = select(Task).filter(
-        Task.id == id,
-        (Task.user_id == current_user.id) | 
-        (Task.folder.has(FolderMember.user_id == current_user.id)) 
-        .distinct()
-    )
+    stmt = select(Task).filter(Task.id == id)
     result = await db.execute(stmt)
     db_task = result.scalar_one_or_none()
     
     if not db_task:
-        raise HTTPException(status_code=404, detail="Task not found or not authorized")
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    await check_folder_access(db_task.folder_id, mode="member", db=db, current_user=current_user)
     
     return db_task
 
@@ -227,9 +256,11 @@ async def search_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
-    stmt = select(Task).filter(
-        (Task.user_id == current_user.id) |  
-        (Task.folder.has(FolderMember.user_id == current_user.id))
+    stmt = (
+        select(Task)
+        .join(Task.folder)
+        .join(Folder.members)
+        .where(FolderMember.user_id == current_user.id)
     )
 
     stmt = apply_task_filters(stmt, task)
@@ -245,9 +276,11 @@ async def get_all_folders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
-    stmt = select(Folder).filter(
-        (Folder.owner_id == current_user.id) |  
-        (Folder.members.any(FolderMember.user_id == current_user.id))
+    stmt = (
+        select(Folder)
+        .outerjoin(Folder.members)
+        .where(FolderMember.user_id == current_user.id)
+        .distinct()
     )
     result = await db.execute(stmt)
     folders = result.scalars().all()
@@ -273,6 +306,16 @@ async def create_folder(
     await db.commit()
 
     return new_folder
+
+@app.get("/folders/{folder_id}", response_model=FolderModel)
+async def get_folder_by_id(
+    folder_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    folder = await check_folder_access(folder_id, mode="member", db=db, current_user=current_user)
+
+    return folder
 
 @app.put("/folders/{folder_id}", response_model=FolderModel)
 async def edit_folder(
@@ -339,18 +382,29 @@ async def get_tasks_by_folder(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-@app.get("/folders/{folder_id}/members", response_model=List[FolderMemberModel])
+@app.get("/folders/{folder_id}/members", response_model=List[FolderMemberWithEmail])
 async def get_folder_members(
     folder_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
-    await check_folder_access(folder_id, mode="owner", db=db, current_user=current_user)
+    await check_folder_access(folder_id, mode="member", db=db, current_user=current_user)
 
-    stmt = select(FolderMember).filter(FolderMember.folder_id == folder_id)
+    stmt = (
+        select(FolderMember, User.email)
+        .join(User, FolderMember.user_id == User.id)
+        .where(FolderMember.folder_id == folder_id)
+    )
     result = await db.execute(stmt)
-    members = result.scalars().all()
-    return members
+    members = result.all()
+    return [FolderMemberWithEmail(
+        id=member.FolderMember.id,
+        folder_id=member.FolderMember.folder_id,
+        user_id=member.FolderMember.user_id,
+        role=member.FolderMember.role,
+        added_at=member.FolderMember.added_at,
+        email=member.email
+    ) for member in members]
 
 @app.post("/folders/{folder_id}/members", response_model=FolderMemberModel)
 async def add_folder_member(
@@ -380,16 +434,41 @@ async def add_folder_member(
     await db.refresh(new_member)
     return new_member
 
-@app.put("/folders/{folder_id}/members", response_model=FolderMemberModel)
+@app.get("/folders/{folder_id}/members/{member_id}", response_model=FolderMemberModel)
+async def get_folder_member_by_id(
+    folder_id: int,
+    member_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(fastapi_users.current_user(active=True))
+):
+    await check_folder_access(folder_id, mode="owner", db=db, current_user=current_user)
+
+    stmt = select(FolderMember).filter(
+        FolderMember.folder_id == folder_id, 
+        FolderMember.user_id == member_id
+    )
+    result = await db.execute(stmt)
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found or not authorized")
+
+    return member
+
+@app.put("/folders/{folder_id}/members/{member_id}", response_model=FolderMemberModel)
 async def change_member_permissions(
     folder_id: int,
+    member_id: uuid.UUID,
     folder_member: FolderMemberModel,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
     await check_folder_access(folder_id, mode="owner", db=db, current_user=current_user)
 
-    stmt = select(FolderMember).filter(FolderMember.folder_id == folder_id, FolderMember.user_id == folder_member.user_id)
+    stmt = select(FolderMember).filter(
+        FolderMember.folder_id == folder_id, 
+        FolderMember.user_id == member_id
+    )
     result = await db.execute(stmt)
     member = result.scalar_one_or_none()
 
@@ -404,16 +483,19 @@ async def change_member_permissions(
     await db.refresh(member)
     return member
 
-@app.delete("/folders/{folder_id}/members", response_model=Dict[str, str])
+@app.delete("/folders/{folder_id}/members/{member_id}", response_model=Dict[str, str])
 async def delete_folder_member(
     folder_id: int,
-    folder_member: FolderMemberModel,
+    member_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(fastapi_users.current_user(active=True))
 ):
     await check_folder_access(folder_id, mode="owner", db=db, current_user=current_user)
 
-    stmt = select(FolderMember).filter(FolderMember.folder_id == folder_id, FolderMember.user_id == folder_member.user_id)
+    stmt = select(FolderMember).filter(
+        FolderMember.folder_id == folder_id, 
+        FolderMember.user_id == member_id
+    )
     result = await db.execute(stmt)
     member = result.scalar_one_or_none()
 
@@ -422,7 +504,7 @@ async def delete_folder_member(
 
     await db.delete(member)
     await db.commit()
-    return {"message": f"Member {folder_member.user_id} deleted from folder {folder_id}"}
+    return {"message": f"Member {member_id} deleted from folder {folder_id}"}
 
 @app.post("/folders/{folder_id}/tasks/search", response_model=List[TaskModel])
 async def search_tasks_in_folder(

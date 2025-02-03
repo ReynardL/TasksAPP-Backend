@@ -53,14 +53,24 @@ class FolderModel(BaseModel):
 class FolderMemberModel(BaseModel):
     id: Optional[int] = None
     folder_id: Optional[int] = None
-    user_id: uuid.UUID
+    user_id: uuid.UUID = None
     role: RoleEnum = RoleEnum.viewer
     added_at: Optional[datetime] = None
 
-class UserRead(schemas.BaseUser[uuid.UUID]):
+class FolderMemberWithEmail(FolderMemberModel):
+    email: str
+
+    class Config:
+        from_attributes = True
+
+class UserReturnModel(BaseModel):
     id: Optional[uuid.UUID] = None
     email: Optional[str] = None
     message: Optional[str] = None
+
+class UserRead(schemas.BaseUser[uuid.UUID]):
+    class Config:
+        from_attributes = True
 
 class UserCreate(schemas.BaseUserCreate):
     email: EmailStr
