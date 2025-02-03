@@ -1,7 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
 from enum import Enum
+from fastapi_users import schemas
+import uuid
+
+class RoleEnum(str, Enum):
+    owner = "owner"
+    editor = "editor"
+    viewer = "viewer"
 
 class PriorityEnum(str, Enum):
     low = "low"
@@ -27,10 +34,48 @@ class TaskModel(BaseModel):
     completed: Optional[CompletedEnum] = None
     due: Optional[datetime] = None
     priority: Optional[PriorityEnum] = None
-    repeat_type: Optional[RepeatEnum] = None
+    repeat_type: Optional[RepeatEnum] = RepeatEnum.never
     repeat_amount: Optional[int] = None
     created: Optional[datetime] = None
+    user_id: Optional[uuid.UUID] = None
+    folder_id: Optional[int] = None
 
 class TaskResponse(BaseModel):
     message: str
     task: TaskModel
+
+class FolderModel(BaseModel):
+    id: Optional[int] = None
+    name: str
+    created_at: Optional[datetime] = None
+    owner_id: Optional[uuid.UUID] = None
+
+class FolderMemberModel(BaseModel):
+    id: Optional[int] = None
+    folder_id: Optional[int] = None
+    user_id: uuid.UUID = None
+    role: RoleEnum = RoleEnum.viewer
+    added_at: Optional[datetime] = None
+
+class FolderMemberWithEmail(FolderMemberModel):
+    email: str
+
+    class Config:
+        from_attributes = True
+
+class UserReturnModel(BaseModel):
+    id: Optional[uuid.UUID] = None
+    email: Optional[str] = None
+    message: Optional[str] = None
+
+class UserRead(schemas.BaseUser[uuid.UUID]):
+    class Config:
+        from_attributes = True
+
+class UserCreate(schemas.BaseUserCreate):
+    email: EmailStr
+    password: str
+
+class UserUpdate(schemas.BaseUserUpdate):
+    email: Optional[EmailStr]
+    password: Optional[str]
